@@ -12,6 +12,7 @@
   "dependencies": {
     "autoprefixer": "^10.5.0",
     "jspdf": "^4.2.1",
+    "library-management-system-root": "file:..",
     "lucide-react": "^1.18.0",
     "postcss": "^8.5.15",
     "react": "^19.2.6",

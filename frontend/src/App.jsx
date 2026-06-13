@@ -9,29 +9,10 @@ import Categories from './pages/Categories';
 import Members from './pages/Members';
 import Issues from './pages/Issues';
 import Fines from './pages/Fines';
-import Reports from './pages/Reports';
-import ProceduresTriggers from './pages/ProceduresTriggers';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [activePage, setActivePage] = useState('dashboard');
-  const [dbType, setDbType] = useState('mock');
-
-  useEffect(() => {
-    const checkDbType = async () => {
-      try {
-        const res = await fetch('http://localhost:5000/api/db-type');
-        const data = await res.json();
-        setDbType(data.dbType || 'mock');
-      } catch (err) {
-        console.warn('Could not query database driver mode from server, defaulting to mock fallback.');
-        setDbType('mock');
-      }
-    };
-    if (token) {
-      checkDbType();
-    }
-  }, [token]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -58,10 +39,7 @@ function App() {
         return <Issues />;
       case 'fines':
         return <Fines />;
-      case 'reports':
-        return <Reports />;
-      case 'procedures':
-        return <ProceduresTriggers />;
+
       default:
         return <Dashboard />;
     }
@@ -75,7 +53,7 @@ function App() {
       {/* Main Panel Content Area */}
       <div className="sm:ml-64 min-h-screen flex flex-col">
         {/* Top Navbar */}
-        <Navbar dbType={dbType} />
+        <Navbar />
 
         {/* Dynamic page contents wrapper */}
         <main className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto">

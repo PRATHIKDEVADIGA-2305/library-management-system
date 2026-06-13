@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   BookOpen, LayoutDashboard, Users, BookMarked, 
-  FileText, ShieldAlert, Layers, UserCheck, Settings, LogOut
+  ShieldAlert, Layers, UserCheck, LogOut
 } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, handleLogout }) => {
@@ -12,9 +12,7 @@ const Sidebar = ({ activePage, setActivePage, handleLogout }) => {
     { id: 'categories', label: 'Categories', icon: Layers },
     { id: 'members', label: 'Members', icon: UserCheck },
     { id: 'issues', label: 'Issue & Return', icon: BookMarked },
-    { id: 'fines', label: 'Fines', icon: ShieldAlert },
-    { id: 'reports', label: 'SQL Reports', icon: FileText },
-    { id: 'procedures', label: 'Procedures & Triggers', icon: Settings }
+    { id: 'fines', label: 'Fines', icon: ShieldAlert }
   ];
 
   return (
@@ -25,7 +23,7 @@ const Sidebar = ({ activePage, setActivePage, handleLogout }) => {
           <div className="flex items-center gap-2 px-3 py-4 mb-6 border-b border-slate-800">
             <BookOpen className="h-8 w-8 text-library-400" />
             <div>
-              <h1 className="text-lg font-bold tracking-wider text-white">BIBLIOTHECA</h1>
+              <h1 className="text-lg font-bold tracking-wider text-white">Library Management System</h1>
               <span className="text-xs text-library-500 font-medium tracking-widest uppercase">Admin Portal</span>
             </div>
           </div>

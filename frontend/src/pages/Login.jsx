@@ -49,7 +49,7 @@ const Login = ({ setToken }) => {
           <div className="p-3 bg-library-600 rounded-xl text-white shadow-lg shadow-library-600/35 mb-4 animate-bounce">
             <BookOpen className="h-8 w-8" />
           </div>
-          <h2 className="text-2xl font-bold tracking-tight text-white">BIBLIOTHECA</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-white text-center">Library Management System</h2>
           <p className="text-slate-400 text-sm mt-1">Sign in to access your dashboard</p>
         </div>
 

@@ -3,18 +3,32 @@ import { query, getDbType, getMockDb } from '../config/db.js';
 
 const router = express.Router();
 
+const mysqlActivityLogs = [
+  { timestamp: new Date(Date.now() - 4 * 3600000).toISOString(), activity: 'Book "A Brief History of Time" returned by Bob Brown.' },
+  { timestamp: new Date(Date.now() - 24 * 3600000).toISOString(), activity: 'Fine of $9.00 generated for Alice Johnson (late return of "1984").' },
+  { timestamp: new Date(Date.now() - 48 * 3600000).toISOString(), activity: 'Book "Animal Farm" issued to John Doe.' }
+];
+
 // Helper to log activities in MySQL or Mock db
 const addActivityLog = async (activity) => {
+  const cleanActivityText = activity
+    .replace(/^\[Trigger Demonstration\]\s*/i, '')
+    .replace(/^\[Trigger Effect\]\s*/i, '');
+
   if (getDbType() === 'mock') {
     const mock = getMockDb();
-    mock.activityLogs.unshift({
-      timestamp: new Date().toISOString(),
-      activity
-    });
+    if (mock) {
+      mock.activityLogs.unshift({
+        timestamp: new Date().toISOString(),
+        activity: cleanActivityText
+      });
+    }
   } else {
-    // In MySQL, we can store simple system events in a table or just return locally.
-    // For demo purposes, we will return or log to console.
-    console.log(`[Activity Log] ${activity}`);
+    mysqlActivityLogs.unshift({
+      timestamp: new Date().toISOString(),
+      activity: cleanActivityText
+    });
+    console.log(`[Activity Log] ${cleanActivityText}`);
   }
 };
 
@@ -74,10 +88,7 @@ router.get('/dashboard/stats', async (req, res) => {
       const fines = await query('SELECT SUM(amount) AS sum FROM FINE');
       totalFinesAmount = fines[0].sum || 0.00;
       
-      // Recent activities simulated logs (since there's no native SQL activity table requested, we pull from issues/fines)
-      recentLogs = [
-        { timestamp: new Date().toISOString(), activity: 'MySQL active session monitoring statistics.' }
-      ];
+      recentLogs = mysqlActivityLogs.slice(0, 8);
     }
 
     // Prepare chart data: books per category
@@ -469,7 +480,7 @@ router.post('/issues', async (req, res) => {
     // Add activity log entry
     const memRows = await query('SELECT name FROM MEMBER WHERE member_id = ?', [Number(member_id)]);
     const memberName = memRows[0] ? memRows[0].name : `Member ID ${member_id}`;
-    await addActivityLog(`[Trigger Demonstration] Book "${book.title}" availability automatically updated to 'Unavailable' after issuing to ${memberName}.`);
+    await addActivityLog(`Book "${book.title}" issued to ${memberName}. Status changed to Unavailable.`);
 
     res.json({ success: true, message: 'Book issued successfully' });
   } catch (err) {
@@ -501,7 +512,7 @@ router.put('/issues/:id/return', async (req, res) => {
       fineMsg = ` Late return detected (${days} days). Fine of $${(days * 1.50).toFixed(2)} generated automatically.`;
     }
 
-    await addActivityLog(`[Trigger Demonstration] Book "${bookTitle}" returned. Availability set to 'Available'.${fineMsg}`);
+    await addActivityLog(`Book "${bookTitle}" returned. Availability restored to Available.${fineMsg}`);
 
     res.json({ success: true, message: 'Book returned successfully' });
   } catch (err) {
@@ -538,186 +549,6 @@ router.put('/fines/:id/pay', async (req, res) => {
     res.json({ success: true, message: 'Fine marked as Paid successfully' });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
-  }
-});
-
-// --- STORED PROCEDURES ROUTING ---
-router.post('/procedures/issue-book', async (req, res) => {
-  const { issue_id, book_id, member_id, issue_date, due_date } = req.body;
-  try {
-    if (getDbType() === 'mock') {
-      await query('CALL IssueBook(?,?,?,?,?)', [issue_id, book_id, member_id, issue_date, due_date]);
-    } else {
-      await query('CALL IssueBook(?, ?, ?, ?, ?)', [
-        Number(issue_id),
-        Number(book_id),
-        Number(member_id),
-        issue_date,
-        due_date
-      ]);
-    }
-    res.json({ success: true, message: 'Stored Procedure IssueBook() executed successfully.' });
-  } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
-  }
-});
-
-router.post('/procedures/calculate-fine', async (req, res) => {
-  const { issue_id } = req.body;
-  try {
-    let fineAmount = 0.00;
-    if (getDbType() === 'mock') {
-      const result = await query('CALL CalculateFine(?, @fine)', [issue_id]);
-      fineAmount = result[0][0].fine_amount;
-    } else {
-      // In MySQL: call procedure and select output variable
-      await query('CALL CalculateFine(?, @fine)', [Number(issue_id)]);
-      const outVal = await query('SELECT @fine AS fine');
-      fineAmount = outVal[0].fine || 0.00;
-    }
-    res.json({
-      success: true,
-      fineAmount: Number(fineAmount).toFixed(2),
-      message: `Stored Procedure CalculateFine() executed. Calculated fine: $${Number(fineAmount).toFixed(2)}`
-    });
-  } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
-  }
-});
-
-// --- RELATIONAL REPORTS ROUTING (10 specific queries) ---
-router.get('/reports/:type', async (req, res) => {
-  const type = req.params.type;
-  try {
-    let sql = '';
-    let params = [];
-
-    switch (type) {
-      case 'all_books':
-        sql = 'SELECT * FROM BOOK';
-        break;
-
-      case 'books_by_author':
-        const authorId = req.query.authorId;
-        if (!authorId) {
-          return res.status(400).json({ success: false, error: 'authorId parameter is required' });
-        }
-        sql = 'SELECT * FROM BOOK WHERE author_id = ?';
-        params.push(Number(authorId));
-        break;
-
-      case 'inner_join':
-        sql = `
-          SELECT B.book_id, B.title, B.price, C.category_name, A.name AS author_name, B.availability 
-          FROM BOOK B 
-          INNER JOIN CATEGORY C ON B.category_id = C.category_id 
-          INNER JOIN AUTHOR A ON B.author_id = A.author_id
-        `;
-        break;
-
-      case 'three_table_join':
-        sql = `
-          SELECT I.issue_id, M.name AS member_name, B.title AS book_title, I.issue_date, I.due_date, I.return_date 
-          FROM ISSUE I 
-          INNER JOIN MEMBER M ON I.member_id = M.member_id 
-          INNER JOIN BOOK B ON I.book_id = B.book_id
-        `;
-        break;
-
-      case 'group_by':
-        sql = `
-          SELECT C.category_name, COUNT(B.book_id) AS total_books 
-          FROM BOOK B 
-          INNER JOIN CATEGORY C ON B.category_id = C.category_id 
-          GROUP BY C.category_name
-        `;
-        break;
-
-      case 'having':
-        sql = `
-          SELECT C.category_name, COUNT(B.book_id) AS total_books 
-          FROM BOOK B 
-          INNER JOIN CATEGORY C ON B.category_id = C.category_id 
-          GROUP BY C.category_name 
-          HAVING COUNT(B.book_id) > 2
-        `;
-        break;
-
-      case 'subquery':
-        sql = `
-          SELECT book_id, title, price, availability 
-          FROM BOOK 
-          WHERE price > (SELECT AVG(price) FROM BOOK)
-        `;
-        break;
-
-      case 'correlated_subquery':
-        sql = `
-          SELECT B1.book_id, B1.title, B1.price, B1.category_id, B1.availability 
-          FROM BOOK B1 
-          WHERE B1.price > (
-            SELECT AVG(B2.price) 
-            FROM BOOK B2 
-            WHERE B2.category_id = B1.category_id
-          )
-        `;
-        break;
-
-      case 'left_join':
-        sql = `
-          SELECT M.name AS member_name, I.issue_id, I.issue_date 
-          FROM MEMBER M 
-          LEFT JOIN ISSUE I ON M.member_id = I.member_id
-        `;
-        break;
-
-      case 'not_exists':
-        sql = `
-          SELECT book_id, title, price, availability 
-          FROM BOOK B 
-          WHERE NOT EXISTS (
-            SELECT 1 
-            FROM ISSUE I 
-            WHERE I.book_id = B.book_id
-          )
-        `;
-        break;
-
-      default:
-        return res.status(400).json({ success: false, error: 'Invalid report type' });
-    }
-
-    const rows = await query(sql, params);
-    
-    // In mysql, query returns [rows]. In our mock wrapper query(sql) returns rows directly.
-    // To handle both elegantly:
-    const data = (getDbType() === 'mock') ? rows[0] : rows;
-
-    res.json({
-      success: true,
-      queryExecuted: sql.replace(/\s+/g, ' ').trim(),
-      data
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// --- ACTIVITY LOGS ROUTE ---
-router.get('/activity-logs', async (req, res) => {
-  try {
-    let rows = [];
-    if (getDbType() === 'mock') {
-      rows = getMockDb().activityLogs;
-    } else {
-      // In MySQL, retrieve synthetic list
-      rows = [
-        { timestamp: new Date().toISOString(), activity: 'MySQL active session monitoring statistics.' }
-      ];
-    }
-    res.json({ success: true, data: rows });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
   }
 });
 
